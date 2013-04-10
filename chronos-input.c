@@ -12,8 +12,8 @@ char TRANS_INIT[3] = {0xFF, 0x07, 0x03};
 char TRANS_REQUEST_ACC[7] = {0xFF, 0x08, 0x07, 0x00, 0x00, 0x00, 0x00};
 
 // Definitions
-#define MOUSE_MODE 0;
-#define JOYSTICK_MODE 1;
+#define MOUSE_MODE 0
+#define JOYSTICK_MODE 1
 #define die(str, args...) do { \
         perror(str); \
         exit(EXIT_FAILURE); \
@@ -23,7 +23,7 @@ char TRANS_REQUEST_ACC[7] = {0xFF, 0x08, 0x07, 0x00, 0x00, 0x00, 0x00};
 char* accessPointDev = "/dev/uinput";
 char* uInputDev = "/dev/ttyACM0";
 int delay = 30000;
-int mode = MOUSE_MODE;
+int devmode = MOUSE_MODE;
 
 // Global variables
 int fd_uinput, fd_transmitter;
@@ -43,9 +43,9 @@ void parseCmdOptions(int argc, char **argv) {
 			break;
 		case 'm':
 			if (optarg[0] == 'm') {
-				mode = MOUSE_MODE;
+				devmode = MOUSE_MODE;
 			} else if (optarg[0] == 'j') {
-				mode = JOYSTICK_MODE;
+				devmode = JOYSTICK_MODE;
 			} else {
 				fprintf(stderr, "Error: Unknown mode '%c'\n", optarg[0]);
 				exit(1);
@@ -100,23 +100,41 @@ void openDevices(char* accessPointDev, char* uInputDev)
 
 void setIoctlPropertiesForUinput()
 {
-	// Button events
 	if (ioctl(fd_uinput, UI_SET_EVBIT, EV_KEY) < 0)
 		die("Error: ioctl EV_KEY failed");
-	if (ioctl(fd_uinput, UI_SET_KEYBIT, BTN_LEFT) < 0)
-		die("Error: ioctl BTN_LEFT failed");
-	if (ioctl(fd_uinput, UI_SET_KEYBIT, BTN_RIGHT) < 0)
-		die("Error: ioctl BTN_RIGHT failed");
-	if (ioctl(fd_uinput, UI_SET_KEYBIT, BTN_MIDDLE) < 0)
-		die("Error: ioctl BTN_MIDDLE failed");
+	if (devmode == MOUSE_MODE) {
+		// Button events
+		if (ioctl(fd_uinput, UI_SET_KEYBIT, BTN_LEFT) < 0)
+			die("Error: ioctl BTN_LEFT failed");
+		if (ioctl(fd_uinput, UI_SET_KEYBIT, BTN_RIGHT) < 0)
+			die("Error: ioctl BTN_RIGHT failed");
+		if (ioctl(fd_uinput, UI_SET_KEYBIT, BTN_MIDDLE) < 0)
+			die("Error: ioctl BTN_MIDDLE failed");
 
-	// Movement events
-	if (ioctl(fd_uinput, UI_SET_EVBIT, EV_REL) < 0)
-		die("Error: ioctl EV_REL failed");
-	if (ioctl(fd_uinput, UI_SET_RELBIT, REL_X) < 0)
-		die("Error: ioctl REL_X failed");
-	if (ioctl(fd_uinput, UI_SET_RELBIT, REL_Y) < 0)
-		die("Error: ioctl REL_Y failed");
+		// Movement events
+		if (ioctl(fd_uinput, UI_SET_EVBIT, EV_REL) < 0)
+			die("Error: ioctl EV_REL failed");
+		if (ioctl(fd_uinput, UI_SET_RELBIT, REL_X) < 0)
+			die("Error: ioctl REL_X failed");
+		if (ioctl(fd_uinput, UI_SET_RELBIT, REL_Y) < 0)
+			die("Error: ioctl REL_Y failed");
+	} else if (devmode == 1) {
+		if (ioctl(fd_uinput, UI_SET_KEYBIT, BTN_JOYSTICK) < 0)
+			die("Error: ioctl BTN_LEFT failed");
+		if (ioctl(fd_uinput, UI_SET_KEYBIT, BTN_JOYSTICK + 1) < 0)
+			die("Error: ioctl BTN_LEFT failed");
+		if (ioctl(fd_uinput, UI_SET_KEYBIT, BTN_JOYSTICK + 2) < 0)
+			die("Error: ioctl BTN_LEFT failed");
+		
+		if (ioctl(fd_uinput, UI_SET_EVBIT, EV_ABS) < 0)
+			die("Error: ioctl EV_REL failed");
+		if (ioctl(fd_uinput, UI_SET_ABSBIT, ABS_X) < 0)
+			die("Error: ioctl REL_X failed");
+		if (ioctl(fd_uinput, UI_SET_ABSBIT, ABS_Y) < 0)
+			die("Error: ioctl REL_Y failed");
+		if (ioctl(fd_uinput, UI_SET_ABSBIT, ABS_Z) < 0)
+			die("Error: ioctl REL_Y failed");
+	}
 }
 
 struct uinput_user_dev createUinputDevice()
@@ -170,7 +188,6 @@ void sendInputEvent(__u16 type, __u16 code, __s32 value)
 int main(int argc, char **argv)
 {
 	struct uinput_user_dev uidev;
-	struct input_event ev;
 	char buffer[7];
 	__u16 button_pressed = 0;
 	int debounce_counter = 0;
@@ -180,7 +197,7 @@ int main(int argc, char **argv)
 	setupSignalHandlers();
 	openDevices(uInputDev, accessPointDev);
 	setIoctlPropertiesForUinput();
-	uidev = createUinputDevice(mode);
+	uidev = createUinputDevice(devmode);
 
 	// According to the manual we should wait up to 1 second after
 	// initializing the Chronos hardware
@@ -204,24 +221,40 @@ int main(int argc, char **argv)
 			// between results in a drag'n'drop action.
 			// TODO: Find a better use for the keys in PPT mode
 		} else if (buffer[3] > 1 && debounce_counter == 0) {
-			if (buffer[3] == 17 || buffer[3] == 18) {
-				button_pressed = BTN_LEFT;
-			} else if (buffer[3] == 49 || buffer[3] == 50) {
-				button_pressed = BTN_RIGHT;
-			} else if (buffer[3] == 33 || buffer[3] == 34) {
-				button_pressed = BTN_MIDDLE;
+			if (devmode == MOUSE_MODE) {
+				if (buffer[3] == 17 || buffer[3] == 18) {
+					button_pressed = BTN_LEFT;
+				} else if (buffer[3] == 49 || buffer[3] == 50) {
+					button_pressed = BTN_RIGHT;
+				} else if (buffer[3] == 33 || buffer[3] == 34) {
+					button_pressed = BTN_MIDDLE;
+				}
+			} else if (devmode == JOYSTICK_MODE) {
+				if (buffer[3] == 17 || buffer[3] == 18) {
+					button_pressed = BTN_JOYSTICK;
+				} else if (buffer[3] == 49 || buffer[3] == 50) {
+					button_pressed = BTN_JOYSTICK + 1;
+				} else if (buffer[3] == 33 || buffer[3] == 34) {
+					button_pressed = BTN_JOYSTICK + 2;
+				}
 			}
 			sendInputEvent(EV_KEY, button_pressed, 1);
 			debounce_counter = 1;
 			// Process acceleration data
 		} else if (buffer[3] == 1) {
-			sendInputEvent(EV_REL, REL_X, buffer[5]);
-			sendInputEvent(EV_REL, REL_Y, buffer[4]);
+			if (devmode == MOUSE_MODE) {
+				sendInputEvent(EV_REL, REL_X, buffer[5]);
+				sendInputEvent(EV_REL, REL_Y, buffer[4]);
+			} else if (devmode == JOYSTICK_MODE) {
+				sendInputEvent(EV_ABS, ABS_X, buffer[5] * 256);
+				sendInputEvent(EV_ABS, ABS_Y, buffer[4] * 256);
+				sendInputEvent(EV_ABS, ABS_Z, buffer[6] * 256);
+			}
 		}
 		sendInputEvent(EV_SYN, 0, 0);
 
 		if (debounce_counter > 0) {
-			if (debounce_counter == 5)
+			if (debounce_counter == 20)
 				debounce_counter = 0;
 			else
 				debounce_counter++;
