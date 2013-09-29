@@ -24,13 +24,14 @@ char* accessPointDev = "/dev/uinput";
 char* uInputDev = "/dev/ttyACM0";
 int delay = 30000;
 int devmode = MOUSE_MODE;
+double accelX = 1, accelY = 1, accelZ = 1;
 
 // Global variables
 int fd_uinput, fd_transmitter;
 
 void parseCmdOptions(int argc, char **argv) {
 	int option;
-	while ((option = getopt(argc, argv, "a:u:p:m:h")) != -1) {
+	while ((option = getopt(argc, argv, "a:u:p:m:s:h")) != -1) {
 		switch (option) {
 		case 'a':
 			accessPointDev = optarg;
@@ -51,6 +52,23 @@ void parseCmdOptions(int argc, char **argv) {
 				exit(1);
 			}
 			break;
+		case 's':
+			if (optarg[0] == 'x') {
+				accelX = atof(optarg + 1);
+				printf("Setting acceleration of X axis to %f\n", accelX);
+			} else if (optarg[0] == 'y') {
+				accelY = atof(optarg + 1);
+				printf("Setting acceleration of Y axis to %f\n", accelY);
+			} else if (optarg[0] == 'z') {
+				accelZ = atof(optarg + 1);
+				printf("Setting acceleration of Z axis to %f\n", accelZ);
+			} else {
+				accelX = atof(optarg);
+				accelY = atof(optarg);
+				accelZ = atof(optarg);
+				printf("Setting acceleration of all axes to %f\n", accelX);
+			}
+			break;
 		case 'h':
 		case '?':
 			printf("\neZ430-Chronos mouse and joystick driver\n");
@@ -60,6 +78,7 @@ void parseCmdOptions(int argc, char **argv) {
 			printf("-a <device>\t\tPath to access point (default: %s)\n", accessPointDev);
 			printf("-u <device>\t\tPath to uInput device (default: %s)\n", uInputDev);
 			printf("-p <microseconds>\tPolling interval (default: %d)\n", delay);
+			printf("-s [x|y|z|]<multiplier>\tAccelerate axis / general movement speed (default: 1.0)\n");
 			exit(0);
 		}
 	}
@@ -118,7 +137,7 @@ void setIoctlPropertiesForUinput()
 			die("Error: ioctl REL_X failed");
 		if (ioctl(fd_uinput, UI_SET_RELBIT, REL_Y) < 0)
 			die("Error: ioctl REL_Y failed");
-	} else if (devmode == 1) {
+	} else if (devmode == JOYSTICK_MODE) {
 		if (ioctl(fd_uinput, UI_SET_KEYBIT, BTN_JOYSTICK) < 0)
 			die("Error: ioctl BTN_LEFT failed");
 		if (ioctl(fd_uinput, UI_SET_KEYBIT, BTN_JOYSTICK + 1) < 0)
@@ -243,12 +262,12 @@ int main(int argc, char **argv)
 			// Process acceleration data
 		} else if (buffer[3] == 1) {
 			if (devmode == MOUSE_MODE) {
-				sendInputEvent(EV_REL, REL_X, buffer[5]);
-				sendInputEvent(EV_REL, REL_Y, buffer[4]);
+				sendInputEvent(EV_REL, REL_X, buffer[5] * accelX);
+				sendInputEvent(EV_REL, REL_Y, buffer[4] * accelY);
 			} else if (devmode == JOYSTICK_MODE) {
-				sendInputEvent(EV_ABS, ABS_X, buffer[5] * 256);
-				sendInputEvent(EV_ABS, ABS_Y, buffer[4] * 256);
-				sendInputEvent(EV_ABS, ABS_Z, buffer[6] * 256);
+				sendInputEvent(EV_ABS, ABS_X, buffer[5] * 256 * accelX);
+				sendInputEvent(EV_ABS, ABS_Y, buffer[4] * 256 * accelY);
+				sendInputEvent(EV_ABS, ABS_Z, buffer[6] * 256 * accelZ);
 			}
 		}
 		sendInputEvent(EV_SYN, 0, 0);

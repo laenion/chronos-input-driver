@@ -24,8 +24,6 @@ Make sure you have write permissions the uinput device (usually `/dev/uinput`) a
 
 For a list of all program options type `./chronos-input -h`
 
-If you are using your watch in joystick mode I would recommend calibrating it using jscal, otherwise your joystick will probably be very slow.
-
 Both the mouse and the joystick driver behave like real devices, have their own device entries (`/dev/input/[mouse?|js?]`) and thus can be configured and used with your existing applications.
 
 Mouse mode
@@ -52,6 +50,12 @@ When using the driver in joystick mode the keys / axis are as follows:
     y-axis = Axis 1
     x-axis = Axis 2
     z-axis = Axis 3
+
+For practical use it is recommended to calibrate your watch/joystick using a tool like jscal, otherwise you may never get the maximum peak.
+
+Calibration only works for applications using the kernel's joystick interface. For SDL applications you may want to set `SDL_JOYSTICK_DEVICE=/dev/input/js0` on your command line to use the joystick interface. See https://wiki.archlinux.org/index.php/Joystick#Joystick_Input_Systems for more details.
+
+If your application can only use evdev (or is using SDL2) you may use `./chronos-input -m j -s 4.5` (or something like `./chronos-input -m j -s x5 -s y2.25` for adjusting axes individually) to increase responsiveness. 
 
 Problems
 --------
