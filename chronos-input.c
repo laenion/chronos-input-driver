@@ -25,13 +25,14 @@ char* uInputDev = "/dev/ttyACM0";
 int delay = 30000;
 int devmode = MOUSE_MODE;
 double accelX = 1, accelY = 1, accelZ = 1;
+int swapXZ = 0;
 
 // Global variables
 int fd_uinput, fd_transmitter;
 
 void parseCmdOptions(int argc, char **argv) {
 	int option;
-	while ((option = getopt(argc, argv, "a:u:p:m:s:h")) != -1) {
+	while ((option = getopt(argc, argv, "a:u:p:m:s:xh")) != -1) {
 		switch (option) {
 		case 'a':
 			accessPointDev = optarg;
@@ -69,6 +70,9 @@ void parseCmdOptions(int argc, char **argv) {
 				printf("Setting acceleration of all axes to %f\n", accelX);
 			}
 			break;
+		case 'x':
+			swapXZ = 1;
+			break;
 		case 'h':
 		case '?':
 			printf("\neZ430-Chronos mouse and joystick driver\n");
@@ -79,6 +83,7 @@ void parseCmdOptions(int argc, char **argv) {
 			printf("-u <device>\t\tPath to uInput device (default: %s)\n", uInputDev);
 			printf("-p <microseconds>\tPolling interval (default: %d)\n", delay);
 			printf("-s [x|y|z|]<multiplier>\tAccelerate axis / general movement speed (default: 1.0)\n");
+			printf("-x\t\tJoystick mode: Swap X / Z axis (for racing wheel emulation");
 			exit(0);
 		}
 	}
@@ -210,6 +215,7 @@ int main(int argc, char **argv)
 	char buffer[7];
 	__u16 button_pressed = 0;
 	int debounce_counter = 0;
+	char tmp;
 
 	parseCmdOptions(argc, argv);			
 
@@ -265,6 +271,11 @@ int main(int argc, char **argv)
 				sendInputEvent(EV_REL, REL_X, buffer[5] * accelX);
 				sendInputEvent(EV_REL, REL_Y, buffer[4] * accelY);
 			} else if (devmode == JOYSTICK_MODE) {
+				if (swapXZ) {
+					tmp = buffer[6];
+					buffer[6] = buffer[5];
+					buffer[5] = tmp;
+				}
 				sendInputEvent(EV_ABS, ABS_X, buffer[5] * 256 * accelX);
 				sendInputEvent(EV_ABS, ABS_Y, buffer[4] * 256 * accelY);
 				sendInputEvent(EV_ABS, ABS_Z, buffer[6] * 256 * accelZ);
